@@ -105,3 +105,18 @@ venv.bak/
 
 # Images
 *.jpg
+*.png
+imagenes/
+images/
+
+# ZIP / RAR
+*.rar
+*.zip
+
+# TEXT
+*.txt
+*.doc
+*.docx
+
+# Temporal files
+*.tmp
