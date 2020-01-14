@@ -108,58 +108,159 @@ def Piramide (imagenes):
     # se devuleve la imagen compuesta
     return piramide
 
+# Función para ajustar una imagen monobanda a tribanda
+# ARGUMENTOS DE ENTRADA:
+#   -> marix: matriz de la imagen que se quiere convertir
+def AjustaTribanda (matrix):
+    
+    # Solo se ajusta si es monobanda, si es tribanda se devuelve sin cambio
+    if len(matrix.shape) == 2:
+        
+        # Dimensiones de la nueva matriz
+        a = (matrix.shape)[0]
+        b = (matrix.shape)[1]
+        c = 3
+        
+        # Se crea la nueva matriz inicializada a 0
+        new_matrix = np.zeros((a,b,c), dtype=matrix.dtype)
 
-img = LeeImagenCV ('Tablero1.jpg',0)
+        # Se triplica el valor que tenía cada píxel para pasarlo a tribanda
+        for i in range (0, a):
+            for j in range (0, b):
+                for k in range (0, c):
+                    
+                    new_matrix[i][j][k] = matrix[i][j].astype(int)
+                    
+        return new_matrix
+    
+    else:
+        return matrix
+
+# Función para normalizar los valores de la matriz de datos dentro del intervalo
+# [0,255]
+# ARGUMENTOS DE ENTRADA:
+#   -> matrix: matriz de la imnagen qeu se quiere normalizar
+def NormalizarIntervalo (matrix):
+    
+    # Solo se normaliza si la matriz tiene valores fuera del rango [0,255]
+    if (matrix.max() > 255 or matrix.min() < 0):
+        # Se guardan los valores máximos y mínimos de la matriz, y su diferencia
+        maxi = matrix.max()
+        mini = matrix.min()
+        dif = maxi - mini
+        
+        if matrix.ndim ==3: 
+            for i in range (0, (matrix.shape)[0]):
+                for j in range (0, (matrix.shape)[1]):
+                    for k in range (0, (matrix.shape)[2]):
+                        
+                        # Se normaliza cada valor de la imagen según la fórmula
+                        # (normalizar en el intervalo [0,1] y ajustarlo al 
+                        # correspondiente intervalo [0,255])
+                        matrix[i][j][k] = (255 * (matrix[i][j][k] - mini)) // dif
+        
+        else:
+           for i in range (0, (matrix.shape)[0]):
+                for j in range (0, (matrix.shape)[1]):
+                        
+                    # Se normaliza cada valor de la imagen según la fórmula
+                    # (normalizar en el intervalo [0,1] y ajustarlo al 
+                    # correspondiente intervalo [0,255])
+                    matrix[i][j] = (255 * (matrix[i][j] - mini)) // dif 
+                            
+    return matrix
+
+#def ConseguirKeypoints (imagen, ):
+    
+    
+
+img = LeeImagenCV ("Tablero1.jpg",0)
 
 m = cv2.cornerEigenValsAndVecs(img, blockSize=5, ksize=3)
-b = m.reshape(img.shape[0], img.shape[1], 3, 2)
-a = b[:,:,0]
+m = m.reshape(img.shape[0], img.shape[1], 3, 2)         # [[l1 l2][xi x2] [y1 y2]]
 
-print(m[0][0][:2])
-print(a[0][0])
-#aux = np.full((img.shape[0],img.shape[1],2), 0, dtype=np.float64)
-#suma = np.full((img.shape[0],img.shape[1],2), 0, dtype=np.float64)
-#prod = np.full((img.shape[0],img.shape[1],2), 0, dtype=np.float64)
+lamdas = m[:,:,0]       # Nos quedamos solo con las lambas
 
-#for i in range (0,img.shape[0]):
-#    for j in range (0, img.shape[1]):
-#        suma[i][j] = m[i][j][0] + m[i][j][1]
-#        prod[i][j] = m[i][j][0] * m[i][j][1]
-#        aux[i][j][0] = m[i][j][0]
-#        aux[i][j][1] = m[i][j][1]
+f = (lamdas[:,:,0] * lamdas[:,:,1]) / (lamdas[:,:,0] + lamdas[:,:,1])
 
-#a = aux[:][:][0] * aux[:][:][1] 
-#b = aux[:][:][0] + aux[:][:][1]
-
-
-f = m
 
 # Se cogen las direcciones (derivadas)
 
 # Supresión de no máximos
-radio = 5
-puntos = []
+radio = 25
+puntos = np.empty((1,2), dtype=np.int)
+valores = np.empty((1), dtype=np.int)
 
-verificador = np.full((f.shape[0],f.shape[1]), True, dtype=np.bool)
+alto, ancho = f.shape[:2]
 
-for i in range (radio - 1, i < f.shape[0], radio):
+verificador = np.full((alto, ancho), True, dtype=np.bool)
+
+for i in range (0, alto - radio + 1):
     
-    for j in range (radio - 1, j < f.shape[0][0], radio):
-        
-        maximo = -1
-        ind = 0
+    for j in range (0, ancho - radio + 1):
         
         if verificador[i][j]:
-            
+        
+            maximo = -1
+            ind = 0
+            encontrado = False
+        
             for k in range (0, radio):
+                
                 for l in range (0, radio):
-                    
-                    if f[i+k][j+l] > maximo:
+                        
+                    if verificador[i+k][j+l] and (f[i+k][j+l] > maximo):
                         maximo = f[i+k][j+l]
                         ind = [i+k, j+l]
+                        encontrado = True
+                    
+                    verificador[i+k][j+l] = False
             
+            if encontrado:
+                puntos = np.vstack((puntos,np.array(ind)))
+                valores = np.vstack((valores, f[ind[0], ind[1]]))
 
 
+puntos = np.delete(puntos, 0, 0)  # Eleminamos el elemento inical que era basura
+# Orientaciones
+sigma = 4.5
+
+k = cv2.getGaussianKernel(28, 4.5)  # Tamaño asociado al sigma dado, calculado con tam=(int)(sigma*6 + 1)
+
+dx = cv2.filter2D(img, -1, k, borderType=cv2.BORDER_REFLECT_101)
+dy = cv2.filter2D(img, -1, k.transpose(), borderType=cv2.BORDER_REFLECT_101)
+
+img_orientaciones =  dy / dx
+
+# Escala 
+escala = radio*1
+
+keypoints = np.array(cv2.KeyPoint(puntos[0,0], puntos[0,1], _size=escala, _angle=img_orientaciones[puntos[0,0],puntos[0,1]]))
+
+for i in range (1, puntos.shape[0]):
+    
+    np.vstack((keypoints,cv2.KeyPoint(puntos[i,0], puntos[i,1], _size=escala, _angle=img_orientaciones[puntos[i,0],puntos[i,1]])))
+
+
+img = AjustaTribanda(img)
+img = NormalizarIntervalo(img)
+
+#outImage = []
+
+#img2 = cv2.merge([img, img, img])
+outImage = cv2.drawKeypoints(img, keypoints, img)
+
+print("llego aqui")
+# Se muestra la imagen original
+plt.imshow(img)
+
+# se pintan las regiones
+plt.scatter(puntos[:,1], puntos[:,0], s=radio/2, facecolors='none', edgecolors='r', label="rango " + str(radio))
+
+
+plt.show()            
+#            for k in range (ind[0], radio):
+#                for l in range (ind[1], radio):
 
 # Supresión de no maximos 
 # 1. Decidir a que distancia se quiere que estén los máximos. Nomás de 10 píxeles. La funciónd debe depender de ese valor. 
